@@ -13,6 +13,8 @@ class YOLO:
 
         self.labels = labels
         self.net = cv2.dnn.readNetFromDarknet(config, model)
+        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
     def inference_from_file(self, file):
         mat = cv2.imread(file)
