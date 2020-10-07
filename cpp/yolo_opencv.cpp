@@ -193,16 +193,9 @@ int main(int argc, char** argv)
                 preprocess(frame, net, Size(inpWidth, inpHeight), scale, mean, swapRB);
                 processedFramesQueue.push(frame);
 
-                if (asyncNumReq)
-                {
-                    futureOutputs.push(net.forwardAsync());
-                }
-                else
-                {
-                    std::vector<Mat> outs;
-                    net.forward(outs, outNames);
-                    predictionsQueue.push(outs);
-                }
+                std::vector<Mat> outs;
+                net.forward(outs, outNames);
+                predictionsQueue.push(outs);
             }
 
             while (!futureOutputs.empty() &&
