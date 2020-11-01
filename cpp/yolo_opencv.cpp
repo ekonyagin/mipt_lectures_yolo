@@ -23,7 +23,7 @@ std::vector<std::string> classes;
 inline void preprocess(const Mat& frame, Net& net, Size inpSize, float scale,
                        const Scalar& mean, bool swapRB);
 
-void postprocess(Mat& frame, const std::vector<Mat>& out, Net& net, int backend);
+void postprocess(Mat& frame, const std::vector<Mat>& out, Net& net, int backend, int& region);
 
 void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat& frame);
 
@@ -85,22 +85,7 @@ private:
 
 int main(int argc, char** argv)
 {
-    /*CommandLineParser parser(argc, argv, keys);
-
-    const std::string modelName = parser.get<String>("@alias");
-    const std::string zooFile = parser.get<String>("zoo");
-
-    keys += genPreprocArguments(modelName, zooFile);
-
-    parser = CommandLineParser(argc, argv, keys);
-    parser.about("Use this script to run object detection deep learning networks using OpenCV.");
-    if (argc == 1 || parser.has("help"))
-    {
-        parser.printMessage();
-        return 0;
-    }
-    */
-
+    
     confThreshold = 0.5;
     nmsThreshold = 0.4;
     float scale = 0.005;
@@ -109,9 +94,11 @@ int main(int argc, char** argv)
     int inpWidth = 416;
     int inpHeight = 416;
     size_t asyncNumReq = 0;
-    //CV_Assert(parser.has("model"));
+    
     std::string modelPath = "yolov3.weights";
     std::string configPath = "yolov3.cfg";
+  
+    int region = 0;
 
     // Open file with classes names.
     if(1)
@@ -135,7 +122,7 @@ int main(int argc, char** argv)
     std::vector<String> outNames = net.getUnconnectedOutLayersNames();
 
     // Create a window
-    static const std::string kWinName = "Deep learning object detection in OpenCV";
+    static const std::string kWinName = "Original video preview";
     namedWindow(kWinName, WINDOW_NORMAL);
     //int initialConf = (int)(confThreshold * 100);
     //createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
@@ -222,7 +209,7 @@ int main(int argc, char** argv)
         std::vector<Mat> outs = predictionsQueue.get();
         Mat frame = processedFramesQueue.get();
 
-        postprocess(frame, outs, net, backend);
+        postprocess(frame, outs, net, backend, region);
 
         if (predictionsQueue.counter > 1)
         {
@@ -297,9 +284,13 @@ inline void preprocess(const Mat& frame, Net& net, Size inpSize, float scale,
     }
 }
 
-void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend)
+void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend, int& region)
 {
     int coords[2] = {0,0};
+  
+    Size s = frame.size();
+    int Width = s.height;
+    int Height = s.width;
 
     static std::vector<int> outLayers = net.getUnconnectedOutLayers();
     static std::string outLayerType = net.getLayer(outLayers[0])->type;
@@ -354,8 +345,13 @@ void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend
 
     else
         CV_Error(Error::StsNotImplemented, "Unknown output layer type: " + outLayerType);
-    printf("Confidence size is %d\n", (int)confidences.size());
+    //printf("Confidence size is %d\n", (int)confidences.size());
     
+    if(centers.size()==1){
+        int loc = centers[0].x;
+        region = 3 - Width // loc;
+        printf("region is %d\n", region);
+    }
     for (size_t idx = 0; idx < boxes.size(); ++idx)
     {
         Rect box = boxes[idx];
