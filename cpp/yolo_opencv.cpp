@@ -350,6 +350,8 @@ void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend
     if(centers.size()==1){
         int loc = centers[0].x;
         region = 3 - Width / loc;
+        if (region<1)
+            region = 1;
         printf("region is %d\n", region);
     }
     for (size_t idx = 0; idx < boxes.size(); ++idx)
