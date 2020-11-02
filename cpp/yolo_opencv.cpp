@@ -31,6 +31,8 @@ void callback(int pos, void* userdata);
 
 bool AddPoint(const Point& point, const std::vector<Point>& points);
 
+inline int define_bounding_rect(const int& region_id);
+
 #ifdef CV_CXX11
 template <typename T>
 class QueueFPS : public std::queue<T>
@@ -123,7 +125,10 @@ int main(int argc, char** argv)
 
     // Create a window
     static const std::string kWinName = "Original video preview";
+    static const std::string speaker_window = "Speaker view";
     namedWindow(kWinName, WINDOW_NORMAL);
+    namedWindow(speaker_window, WINDOW_NORMAL);
+
     //int initialConf = (int)(confThreshold * 100);
     //createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
 
@@ -137,15 +142,20 @@ int main(int argc, char** argv)
 
     // Frames capturing thread
     QueueFPS<Mat> framesQueue;
+    QueueFPS<Mat> originalFrames;
+    Mat original_frame;
+
     std::thread framesThread([&](){
-        Mat frame1, frame;
+        Mat frame, frame1;
         while (process)
         {
             cap >> frame1;
             
             if (!frame1.empty()){
                 resize(frame1, frame, cv::Size(), 0.2, 0.2);
+                
                 framesQueue.push(frame.clone());
+                originalFrames.push(frame1.clone());
             }
                 
             else
@@ -167,13 +177,7 @@ int main(int argc, char** argv)
                 if (!framesQueue.empty())
                 {
                     frame = framesQueue.get();
-                    if (asyncNumReq)
-                    {
-                        if (futureOutputs.size() == asyncNumReq)
-                            frame = Mat();
-                    }
-                    else
-                        framesQueue.clear();  // Skip the rest of frames
+                    framesQueue.clear();  // Skip the rest of frames
                 }
             }
 
@@ -208,8 +212,15 @@ int main(int argc, char** argv)
 
         std::vector<Mat> outs = predictionsQueue.get();
         Mat frame = processedFramesQueue.get();
-
+        
+        if (!originalFrames.empty())
+        {
+            original_frame = originalFrames.get();
+            //originalFrames.pop();
+        }
+        
         postprocess(frame, outs, net, backend, region);
+
 
         if (predictionsQueue.counter > 1)
         {
@@ -223,45 +234,19 @@ int main(int argc, char** argv)
             putText(frame, label, Point(0, 45), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
         }
         imshow(kWinName, frame);
+        printf("Detecting rect..\n");
+        Mat crop = original_frame(Rect(define_bounding_rect(region), 
+                                                370, 
+                                                1920,
+                                                1080));
+        printf("Rect detected successfully!\n");
+        printf("orig frames size: %d\n", (int)originalFrames.size());
+        imshow(speaker_window, crop);
     }
 
     process = false;
     framesThread.join();
-    processingThread.join();
-/*
-#else  // CV_CXX11
-    if (asyncNumReq)
-        CV_Error(Error::StsNotImplemented, "Asynchronous forward is supported only with Inference Engine backend.");
-
-    // Process frames.
-    Mat frame, blob;
-    while (waitKey(1) < 0)
-    {
-        cap >> frame;
-        if (frame.empty())
-        {
-            waitKey();
-            break;
-        }
-
-        preprocess(frame, net, Size(inpWidth, inpHeight), scale, mean, swapRB);
-
-        std::vector<Mat> outs;
-        net.forward(outs, outNames);
-
-        postprocess(frame, outs, net, backend);
-
-        // Put efficiency information.
-        std::vector<double> layersTimes;
-        double freq = getTickFrequency() / 1000;
-        double t = net.getPerfProfile(layersTimes) / freq;
-        std::string label = format("Inference time: %.2f ms", t);
-        putText(frame, label, Point(0, 15), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
-
-        imshow(kWinName, frame);
-    }
-#endif  // CV_CXX11
-*/
+    processingThread.join();  
     return 0;
 }
 
@@ -395,4 +380,13 @@ bool AddPoint(const Point& point, const std::vector<Point>& points)
             return false;
     }
     return false;
+}
+
+inline int define_bounding_rect(const int& region_id)
+{
+    if (region_id == 1)
+        return 0;
+    if (region_id == 3)
+        return 3840 - 1920;
+    return 960;
 }
