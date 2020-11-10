@@ -372,14 +372,13 @@ bool AddPoint(const Point& point, const std::vector<Point>& points)
 {
     if (points.empty())
         return true;
-    for(size_t j=0; j<points.size(); j++){
-        int diff_x = point.x - points[j].x;
-        int diff_y = point.y - points[j].y;
-        printf("%d %d\n", diff_x, diff_y);
+    for(size_t j=0; j<points.size(); j++)
+    {
+        int diff_x = point.x - points[j].x, diff_y = point.y - points[j].y;
         if (diff_x*diff_x + diff_y*diff_y > 10000)
             return false;
     }
-    return false;
+    return true;
 }
 
 inline int define_bounding_rect(const int& region_id)
