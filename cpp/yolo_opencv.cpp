@@ -12,24 +12,20 @@
 #include <queue>
 #endif
 
-//#include "common.hpp"
-
-using namespace cv;
-using namespace dnn;
 
 float confThreshold, nmsThreshold;
 std::vector<std::string> classes;
 
-inline void preprocess(const Mat& frame, Net& net, Size inpSize, float scale,
-                       const Scalar& mean, bool swapRB);
+inline void preprocess(const cv::Mat& frame, cv::dnn::Net& net, cv::Size inpSize, float scale,
+                       const cv::Scalar& mean, bool swapRB);
 
-void postprocess(Mat& frame, const std::vector<Mat>& out, Net& net, int backend, int& region);
+void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& out, cv::dnn::Net& net, int backend, int& region);
 
-void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat& frame);
+void drawPred(int classId, float conf, int left, int top, int right, int bottom, cv::Mat& frame);
 
 void callback(int pos, void* userdata);
 
-bool AddPoint(const Point& point, const std::vector<Point>& points);
+bool AddPoint(const cv::Point& point, const std::vector<cv::Point>& points);
 
 inline int define_bounding_rect(const int& region_id);
 
@@ -80,7 +76,7 @@ public:
     unsigned int counter;
 
 private:
-    TickMeter tm;
+    cv::TickMeter tm;
     std::mutex mutex;
 };
 #endif  // CV_CXX11
@@ -91,7 +87,7 @@ int main(int argc, char** argv)
     confThreshold = 0.5;
     nmsThreshold = 0.4;
     float scale = 0.005;
-    Scalar mean = 0;
+    cv::Scalar mean = 0;
     bool swapRB = true;
     int inpWidth = 416;
     int inpHeight = 416;
@@ -108,7 +104,7 @@ int main(int argc, char** argv)
         std::string file = "classes.txt";
         std::ifstream ifs(file.c_str());
         if (!ifs.is_open())
-            CV_Error(Error::StsError, "File " + file + " not found");
+            CV_Error(cv::Error::StsError, "File " + file + " not found");
         std::string line;
         while (std::getline(ifs, line))
         {
@@ -117,23 +113,23 @@ int main(int argc, char** argv)
     }
 
     // Load a model.
-    Net net = readNet(modelPath, configPath);
+    cv::dnn::Net net = cv::dnn::readNet(modelPath, configPath);
     int backend = cv::dnn::DNN_BACKEND_CUDA;
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
-    std::vector<String> outNames = net.getUnconnectedOutLayersNames();
+    std::vector<cv::String> outNames = net.getUnconnectedOutLayersNames();
 
     // Create a window
     static const std::string kWinName = "Original video preview";
     static const std::string speaker_window = "Speaker view";
-    namedWindow(kWinName, WINDOW_NORMAL);
-    namedWindow(speaker_window, WINDOW_NORMAL);
+    cv::namedWindow(kWinName, cv::WINDOW_NORMAL);
+    cv::namedWindow(speaker_window, cv::WINDOW_NORMAL);
 
     //int initialConf = (int)(confThreshold * 100);
     //createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
 
     // Open a video file or an image file or a camera stream.
-    VideoCapture cap;
+    cv::VideoCapture cap;
 
     cap.open("Clip0166.MXF");
 
@@ -141,20 +137,20 @@ int main(int argc, char** argv)
     bool process = true;
 
     // Frames capturing thread
-    QueueFPS<Mat> framesQueue;
-    QueueFPS<Mat> originalFrames;
-    Mat original_frame;
+    QueueFPS<cv::Mat> framesQueue;
+    QueueFPS<cv::Mat> originalFrames;
+    cv::Mat original_frame;
 
     std::thread framesThread([&](){
-        Mat frame, frame1;
+        cv::Mat frame, frame1;
         while (process)
         {
             cap >> frame1;
             
             if (!frame1.empty()){
-                resize(frame1, frame, cv::Size(), 0.2, 0.2);
+                cv::resize(frame1, frame, cv::Size(), 0.2, 0.2);
                 
-                framesQueue.push(frame.clone());
+                framesQueue.push(frame);
                 originalFrames.push(frame1.clone());
             }
                 
@@ -164,15 +160,15 @@ int main(int argc, char** argv)
     });
 
     // Frames processing thread
-    QueueFPS<Mat> processedFramesQueue;
-    QueueFPS<std::vector<Mat> > predictionsQueue;
+    QueueFPS<cv::Mat> processedFramesQueue;
+    QueueFPS<std::vector<cv::Mat> > predictionsQueue;
     std::thread processingThread([&](){
-        std::queue<AsyncArray> futureOutputs;
-        Mat blob;
+        //std::queue<AsyncArray> futureOutputs;
+        cv::Mat blob;
         while (process)
         {
             // Get a next frame
-            Mat frame;
+            cv::Mat frame;
             {
                 if (!framesQueue.empty())
                 {
@@ -184,34 +180,26 @@ int main(int argc, char** argv)
             // Process the frame
             if (!frame.empty())
             {
-                preprocess(frame, net, Size(inpWidth, inpHeight), scale, mean, swapRB);
+                preprocess(frame, net, cv::Size(inpWidth, inpHeight), scale, mean, swapRB);
                 processedFramesQueue.push(frame);
 
-                std::vector<Mat> outs;
+                std::vector<cv::Mat> outs;
                 net.forward(outs, outNames);
                 predictionsQueue.push(outs);
             }
 
-            while (!futureOutputs.empty() &&
-                   futureOutputs.front().wait_for(std::chrono::seconds(0)))
-            {
-                AsyncArray async_out = futureOutputs.front();
-                futureOutputs.pop();
-                Mat out;
-                async_out.get(out);
-                predictionsQueue.push({out});
-            }
+    
         }
     });
 
     // Postprocessing and rendering loop
-    while (waitKey(1) < 0)
+    while (cv::waitKey(1) < 0)
     {
         if (predictionsQueue.empty())
             continue;
 
-        std::vector<Mat> outs = predictionsQueue.get();
-        Mat frame = processedFramesQueue.get();
+        std::vector<cv::Mat> outs = predictionsQueue.get();
+        cv::Mat frame = processedFramesQueue.get();
         
         if (!originalFrames.empty())
         {
@@ -224,24 +212,23 @@ int main(int argc, char** argv)
 
         if (predictionsQueue.counter > 1)
         {
-            std::string label = format("Camera: %.2f FPS", framesQueue.getFPS());
-            putText(frame, label, Point(0, 15), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
+            std::string label = cv::format("Camera: %.2f FPS", framesQueue.getFPS());
+            cv::putText(frame, label, cv::Point(0, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
 
-            label = format("Network: %.2f FPS", predictionsQueue.getFPS());
-            putText(frame, label, Point(0, 30), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
+            label = cv::format("Network: %.2f FPS", predictionsQueue.getFPS());
+            cv::putText(frame, label, cv::Point(0, 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
 
-            label = format("Skipped frames: %d", framesQueue.counter - predictionsQueue.counter);
-            putText(frame, label, Point(0, 45), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
+            label = cv::format("Skipped frames: %d", framesQueue.counter - predictionsQueue.counter);
+            cv::putText(frame, label, cv::Point(0, 45), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
         }
-        imshow(kWinName, frame);
-        printf("Detecting rect..\n");
-        Mat crop = original_frame(Rect(define_bounding_rect(region), 
+        cv::imshow(kWinName, frame);
+        //printf("Detecting rect..\n");
+        cv::Mat crop = original_frame(cv::Rect(define_bounding_rect(region), 
                                                 370, 
                                                 1920,
                                                 1080));
-        printf("Rect detected successfully!\n");
-        printf("orig frames size: %d\n", (int)originalFrames.size());
-        imshow(speaker_window, crop);
+        
+        cv::imshow(speaker_window, crop);
     }
 
     process = false;
@@ -250,44 +237,43 @@ int main(int argc, char** argv)
     return 0;
 }
 
-inline void preprocess(const Mat& frame, Net& net, Size inpSize, float scale,
-                       const Scalar& mean, bool swapRB)
+inline void preprocess(const cv::Mat& frame, cv::dnn::Net& net, cv::Size inpSize, float scale,
+                       const cv::Scalar& mean, bool swapRB)
 {
-    static Mat blob;
+    static cv::Mat blob;
     // Create a 4D blob from a frame.
     if (inpSize.width <= 0) inpSize.width = frame.cols;
     if (inpSize.height <= 0) inpSize.height = frame.rows;
-    blobFromImage(frame, blob, 1.0, inpSize, Scalar(), swapRB, false, CV_8U);
+    cv::dnn::blobFromImage(frame, blob, 1.0, inpSize, cv::Scalar(), swapRB, false, CV_8U);
 
     // Run a model.
     net.setInput(blob, "", scale, mean);
     if (net.getLayer(0)->outputNameToIndex("im_info") != -1)  // Faster-RCNN or R-FCN
     {
-        resize(frame, frame, inpSize);
-        Mat imInfo = (Mat_<float>(1, 3) << inpSize.height, inpSize.width, 1.6f);
+        cv::resize(frame, frame, inpSize);
+        cv::Mat imInfo = (cv::Mat_<float>(1, 3) << inpSize.height, inpSize.width, 1.6f);
         net.setInput(imInfo, "im_info");
     }
 }
 
-void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend, int& region)
+void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net& net, int backend, int& region)
 {
     int coords[2] = {0,0};
   
-    Size s = frame.size();
+    cv::Size s = frame.size();
     int Width = s.height;
     int Height = s.width;
 
     static std::vector<int> outLayers = net.getUnconnectedOutLayers();
     static std::string outLayerType = net.getLayer(outLayers[0])->type;
-    printf("%s\n", "hello from postprocess 1\n");
+
     std::vector<int> classIds;
     std::vector<float> confidences;
-    std::vector<Rect> boxes;
-    std::vector<Point> centers;
+    std::vector<cv::Rect> boxes;
+    std::vector<cv::Point> centers;
     
     if (outLayerType == "Region")
     {
-        printf("%s\n", "hello from postprocess 2\n");
         for (size_t i = 0; i < outs.size(); ++i)
         {
             // Network produces output blob with a shape NxC where N is a number of
@@ -297,8 +283,8 @@ void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend
             for (int j = 0; j < outs[i].rows; ++j, data += outs[i].cols)
             {
                 
-                Mat scores = outs[i].row(j).colRange(5, outs[i].cols);
-                Point classIdPoint;
+                cv::Mat scores = outs[i].row(j).colRange(5, outs[i].cols);
+                cv::Point classIdPoint;
                 double confidence;
                 minMaxLoc(scores, 0, &confidence, 0, &classIdPoint);
                 if (classIdPoint.x == 0){
@@ -312,11 +298,11 @@ void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend
                         int top = centerY - height / 2;
 
                         
-                        if (AddPoint(Point(centerX, centerY), centers)){
-                            centers.push_back(Point(centerX, centerY));
+                        if (AddPoint(cv::Point(centerX, centerY), centers)){
+                            centers.push_back(cv::Point(centerX, centerY));
                             classIds.push_back(classIdPoint.x);
                             confidences.push_back((float)confidence);
-                            boxes.push_back(Rect(left, top, width, height));
+                            boxes.push_back(cv::Rect(left, top, width, height));
                         }
                         
                         //break;
@@ -329,7 +315,7 @@ void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend
     }
 
     else
-        CV_Error(Error::StsNotImplemented, "Unknown output layer type: " + outLayerType);
+        CV_Error(cv::Error::StsNotImplemented, "Unknown output layer type: " + outLayerType);
     //printf("Confidence size is %d\n", (int)confidences.size());
     
     if(centers.size()==1){
@@ -337,29 +323,29 @@ void postprocess(Mat& frame, const std::vector<Mat>& outs, Net& net, int backend
         region = 3 - Width / loc;
         if (region<1)
             region = 1;
-        printf("region is %d\n", region);
+        //printf("region is %d\n", region);
     }
     for (size_t idx = 0; idx < boxes.size(); ++idx)
     {
-        Rect box = boxes[idx];
+        cv::Rect box = boxes[idx];
         if (classIds[idx] == 0)
             drawPred(classIds[idx], confidences[idx], box.x, box.y,
                  box.x + box.width, box.y + box.height, frame);
     }
 }
 
-void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat& frame)
+void drawPred(int classId, float conf, int left, int top, int right, int bottom, cv::Mat& frame)
 {
-    rectangle(frame, Point(left, top), Point(right, bottom), Scalar(0, 255, 0));
+    cv::rectangle(frame, cv::Point(left, top), cv::Point(right, bottom), cv::Scalar(0, 255, 0));
 
-    std::string label = format("%.2f", conf);
+    std::string label = cv::format("%.2f", conf);
     
     int baseLine;
-    Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+    cv::Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
 
-    top = max(top, labelSize.height);
-    rectangle(frame, Point(left, top - labelSize.height),
-              Point(left + labelSize.width, top + baseLine), Scalar::all(255), FILLED);
+    top = cv::max(top, labelSize.height);
+    cv::rectangle(frame, cv::Point(left, top - labelSize.height),
+              cv::Point(left + labelSize.width, top + baseLine), cv::Scalar::all(255), cv::FILLED);
     //putText(frame, std::to_string(classId), Point(left, top), FONT_HERSHEY_SIMPLEX, 0.5, Scalar());
 }
 
@@ -368,7 +354,7 @@ void callback(int pos, void*)
     confThreshold = pos * 0.01f;
 }
 
-bool AddPoint(const Point& point, const std::vector<Point>& points)
+bool AddPoint(const cv::Point& point, const std::vector<cv::Point>& points)
 {
     if (points.empty())
         return true;
@@ -376,9 +362,9 @@ bool AddPoint(const Point& point, const std::vector<Point>& points)
     {
         int diff_x = point.x - points[j].x, diff_y = point.y - points[j].y;
         if (diff_x*diff_x + diff_y*diff_y > 10000)
-            return false;
+            return true;
     }
-    return true;
+    return false;
 }
 
 inline int define_bounding_rect(const int& region_id)
