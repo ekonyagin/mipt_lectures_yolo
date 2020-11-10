@@ -234,13 +234,13 @@ int main(int argc, char** argv)
             putText(frame, label, Point(0, 45), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 255, 0));
         }
         imshow(kWinName, frame);
-        printf("Detecting rect..\n");
+        //printf("Detecting rect..\n");
         Mat crop = original_frame(Rect(define_bounding_rect(region), 
                                                 370, 
                                                 1920,
                                                 1080));
-        printf("Rect detected successfully!\n");
-        printf("orig frames size: %d\n", (int)originalFrames.size());
+        //printf("Rect detected successfully!\n");
+        //printf("orig frames size: %d\n", (int)originalFrames.size());
         imshow(speaker_window, crop);
     }
 
