@@ -134,27 +134,26 @@ int main(int argc, char** argv)
 
     // Frames capturing thread
     
-    cv::Mat original_frame;
-    cv::Mat blob;
-    cv::Mat frame, frame1;
+    cv::Mat original_frame, frame;
+    //cv::Mat blob;
         
-    cap >> frame1;
+    cap >> original_frame;
             
-    while((!frame1.empty()) && (cv::waitKey(1) < 0)){
-        cv::resize(frame1, frame, cv::Size(), 0.2, 0.2);
+    while((!original_frame.empty()) && (cv::waitKey(1) < 0)){
+        cv::resize(original_frame, frame, cv::Size(), 0.2, 0.2);
                 
         preprocess(frame, net, cv::Size(inpWidth, inpHeight), scale, mean, swapRB);
         std::vector<cv::Mat> outs;
         net.forward(outs, outNames);
         postprocess(frame, outs, net, backend, region);
-        cv::imshow(kWinName, frame);
+        
         cv::Mat crop = original_frame(cv::Rect(define_bounding_rect(region), 
                                                 370, 
                                                 1920,
                                                 1080));
-        
+        cv::imshow(kWinName, frame);
         cv::imshow(speaker_window, crop);
-        cap >> frame1;
+        cap >> original_frame;
     }
  
     return 0;
