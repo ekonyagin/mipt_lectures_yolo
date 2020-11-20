@@ -117,8 +117,8 @@ int main(int argc, char** argv)
         //cv::imshow(speaker_window, crop);
         outputVideo << crop;
         cap >> original_frame;
-        std::cout << n_processed <<"\n";
-        n++;
+        printf("%d\n", n_processed);
+        n_processed++;
     }
  
     return 0;
