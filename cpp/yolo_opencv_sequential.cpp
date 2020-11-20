@@ -29,59 +29,17 @@ bool AddPoint(const cv::Point& point, const std::vector<cv::Point>& points);
 
 inline int define_bounding_rect(const int& region_id);
 
-template <typename T>
-class QueueFPS : public std::queue<T>
-{
-public:
-    QueueFPS() : counter(0) {}
-
-    void push(const T& entry)
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-
-        std::queue<T>::push(entry);
-        counter += 1;
-        if (counter == 1)
-        {
-            // Start counting from a second frame (warmup).
-            tm.reset();
-            tm.start();
-        }
-    }
-
-    T get()
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        T entry = this->front();
-        this->pop();
-        return entry;
-    }
-
-    float getFPS()
-    {
-        tm.stop();
-        double fps = counter / tm.getTimeSec();
-        tm.start();
-        return static_cast<float>(fps);
-    }
-
-    void clear()
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        while (!this->empty())
-            this->pop();
-    }
-
-    unsigned int counter;
-
-private:
-    cv::TickMeter tm;
-    std::mutex mutex;
-};
 
 int main(int argc, char** argv)
 {
     
+    const string NAME = "output1.avi"
+
+    cv::VideoCapture cap;
+    cv::VideoWriter outputVideo;
+
+    cv::Size outputSize = cv::Size(1920,1080);
+
     confThreshold = 0.5;
     nmsThreshold = 0.4;
     float scale = 0.005;
@@ -126,9 +84,13 @@ int main(int argc, char** argv)
     //createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
 
     // Open a video file or an image file or a camera stream.
-    cv::VideoCapture cap;
-
+    
+    
     cap.open("Clip0166.MXF");
+
+    int ex = static_cast<int>(cap.get(CAP_PROP_FOURCC));     // Get Codec Type- Int form
+
+    outputVideo.open(NAME, ex, cap.get(CAP_PROP_FPS), outputSize, true);
 
     bool process = true;
 
@@ -153,6 +115,7 @@ int main(int argc, char** argv)
                                                 1080));
         cv::imshow(kWinName, frame);
         cv::imshow(speaker_window, crop);
+        outputVideo << crop;
         cap >> original_frame;
     }
  
