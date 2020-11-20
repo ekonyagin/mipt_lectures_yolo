@@ -1,6 +1,6 @@
 #include <fstream>
 #include <sstream>
-
+#include <string>
 #include <opencv2/dnn.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
@@ -33,7 +33,7 @@ inline int define_bounding_rect(const int& region_id);
 int main(int argc, char** argv)
 {
     
-    const string NAME = "output1.avi"
+    const std::string NAME = "output1.avi";
 
     cv::VideoCapture cap;
     cv::VideoWriter outputVideo;
@@ -77,8 +77,8 @@ int main(int argc, char** argv)
     // Create a window
     static const std::string kWinName = "Original video preview";
     static const std::string speaker_window = "Speaker view";
-    cv::namedWindow(kWinName, cv::WINDOW_NORMAL);
-    cv::namedWindow(speaker_window, cv::WINDOW_NORMAL);
+    //cv::namedWindow(kWinName, cv::WINDOW_NORMAL);
+    //cv::namedWindow(speaker_window, cv::WINDOW_NORMAL);
 
     //int initialConf = (int)(confThreshold * 100);
     //createTrackbar("Confidence threshold, %", kWinName, &initialConf, 99, callback);
@@ -88,9 +88,9 @@ int main(int argc, char** argv)
     
     cap.open("Clip0166.MXF");
 
-    int ex = static_cast<int>(cap.get(CAP_PROP_FOURCC));     // Get Codec Type- Int form
+    int ex = static_cast<int>(cap.get(cv::CAP_PROP_FOURCC));     // Get Codec Type- Int form
 
-    outputVideo.open(NAME, ex, cap.get(CAP_PROP_FPS), outputSize, true);
+    outputVideo.open(NAME, ex, cap.get(cv::CAP_PROP_FPS), outputSize, true);
 
     bool process = true;
 
@@ -100,7 +100,7 @@ int main(int argc, char** argv)
     //cv::Mat blob;
         
     cap >> original_frame;
-            
+    int n_processed = 0;        
     while((!original_frame.empty()) && (cv::waitKey(1) < 0)){
         cv::resize(original_frame, frame, cv::Size(), 0.2, 0.2);
                 
@@ -113,10 +113,12 @@ int main(int argc, char** argv)
                                                 370, 
                                                 1920,
                                                 1080));
-        cv::imshow(kWinName, frame);
-        cv::imshow(speaker_window, crop);
+        //cv::imshow(kWinName, frame);
+        //cv::imshow(speaker_window, crop);
         outputVideo << crop;
         cap >> original_frame;
+        std::cout << n_processed <<"\n";
+        n++;
     }
  
     return 0;
