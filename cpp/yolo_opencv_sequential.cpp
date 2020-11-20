@@ -133,103 +133,30 @@ int main(int argc, char** argv)
     bool process = true;
 
     // Frames capturing thread
-    QueueFPS<cv::Mat> framesQueue;
-    QueueFPS<cv::Mat> originalFrames;
-    cv::Mat original_frame;
-
-    std::thread framesThread([&](){
-        cv::Mat frame, frame1;
-        while (process)
-        {
-            cap >> frame1;
-            
-            if (!frame1.empty()){
-                cv::resize(frame1, frame, cv::Size(), 0.2, 0.2);
-                
-                framesQueue.push(frame);
-                originalFrames.push(frame1.clone());
-            }
-                
-            else
-                break;
-        }
-    });
-
-    // Frames processing thread
-    QueueFPS<cv::Mat> processedFramesQueue;
-    QueueFPS<std::vector<cv::Mat> > predictionsQueue;
-    std::thread processingThread([&](){
-        //std::queue<AsyncArray> futureOutputs;
-        cv::Mat blob;
-        while (process)
-        {
-            // Get a next frame
-            cv::Mat frame;
-            {
-                if (!framesQueue.empty())
-                {
-                    frame = framesQueue.get();
-                    framesQueue.clear();  // Skip the rest of frames
-                }
-            }
-
-            // Process the frame
-            if (!frame.empty())
-            {
-                preprocess(frame, net, cv::Size(inpWidth, inpHeight), scale, mean, swapRB);
-                processedFramesQueue.push(frame);
-
-                std::vector<cv::Mat> outs;
-                net.forward(outs, outNames);
-                predictionsQueue.push(outs);
-            }
-
     
-        }
-    });
-
-    // Postprocessing and rendering loop
-    while (cv::waitKey(1) < 0)
-    {
-        if (predictionsQueue.empty())
-            continue;
-
-        std::vector<cv::Mat> outs = predictionsQueue.get();
-        cv::Mat frame = processedFramesQueue.get();
+    cv::Mat original_frame;
+    cv::Mat blob;
+    cv::Mat frame, frame1;
         
-        if (!originalFrames.empty())
-        {
-            original_frame = originalFrames.get();
-            //originalFrames.pop();
-        }
-        
+    cap >> frame1;
+            
+    while((!frame1.empty()) && (cv::waitKey(1) < 0)){
+        cv::resize(frame1, frame, cv::Size(), 0.2, 0.2);
+                
+        preprocess(frame, net, cv::Size(inpWidth, inpHeight), scale, mean, swapRB);
+        std::vector<cv::Mat> outs;
+        net.forward(outs, outNames);
         postprocess(frame, outs, net, backend, region);
-
-
-        if (predictionsQueue.counter > 1)
-        {
-            std::string label = cv::format("Camera: %.2f FPS", framesQueue.getFPS());
-            cv::putText(frame, label, cv::Point(0, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
-
-            label = cv::format("Network: %.2f FPS", predictionsQueue.getFPS());
-            cv::putText(frame, label, cv::Point(0, 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
-
-            label = cv::format("Skipped frames: %d", framesQueue.counter - predictionsQueue.counter);
-            cv::putText(frame, label, cv::Point(0, 45), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0));
-        }
         cv::imshow(kWinName, frame);
-        //printf("Detecting rect..\n");
         cv::Mat crop = original_frame(cv::Rect(define_bounding_rect(region), 
                                                 370, 
                                                 1920,
                                                 1080));
         
         cv::imshow(speaker_window, crop);
+        cap >> frame1;
     }
-
-    process = false;
-    framesThread.join();
-    processingThread.join();  
+ 
     return 0;
 }
 
