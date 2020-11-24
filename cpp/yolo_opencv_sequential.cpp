@@ -5,6 +5,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <stdio.h>
+#include "filtering.h"
 
 #ifdef CV_CXX11
 #include <mutex>
@@ -28,11 +29,13 @@ void callback(int pos, void* userdata);
 bool AddPoint(const cv::Point& point, const std::vector<cv::Point>& points);
 
 inline int define_bounding_rect(const int& region_id);
+inline void make_transition(double& curr_pos, int final_pos);
 
 
 int main(int argc, char** argv)
 {
-    
+    Filtering filt(50, 75); // sliding window length, then delay length (in frames)
+
     const std::string NAME = "output1.avi";
 
     cv::VideoCapture cap;
@@ -85,8 +88,7 @@ int main(int argc, char** argv)
 
     // Open a video file or an image file or a camera stream.
     
-    
-    cap.open("Clip0166.MXF");
+    cap.open("Clip0004.MXF");
 
     int ex = static_cast<int>(cap.get(cv::CAP_PROP_FOURCC));     // Get Codec Type- Int form
 
@@ -94,7 +96,9 @@ int main(int argc, char** argv)
 
     bool process = true;
 
-    // Frames capturing thread
+    int filtered_region = 0;
+
+    double curr_pos = 0;
     
     cv::Mat original_frame, frame;
     //cv::Mat blob;
@@ -108,20 +112,39 @@ int main(int argc, char** argv)
         std::vector<cv::Mat> outs;
         net.forward(outs, outNames);
         postprocess(frame, outs, net, backend, region);
-        
-        cv::Mat crop = original_frame(cv::Rect(define_bounding_rect(region), 
+        filt.update(region);
+        filtered_region = filt.get_region();
+
+        make_transition(curr_pos, filtered_region);
+        //printf("bbox is %d\n", (int)(curr_pos*960));
+        cv::Mat crop = original_frame(cv::Rect((int)(curr_pos*960), 
                                                 370, 
                                                 1920,
                                                 1080));
         //cv::imshow(kWinName, frame);
-        //cv::imshow(speaker_window, crop);
+        //cv::Mat crop_display;
+        //cv::resize(crop, crop_display, cv::Size(), 0.2, 0.2);
+        //cv::imshow(speaker_window, crop_display);
         outputVideo << crop;
         cap >> original_frame;
         printf("%d\n", n_processed);
         n_processed++;
     }
- 
+    printf("%d\n", n_processed);
     return 0;
+}
+
+inline void make_transition(double& curr_pos, int final_pos){
+    int direction;
+    //std::cout << "current: " << curr_pos << " dst: " << final_pos << "\n";
+    if(std::abs(curr_pos-(double)final_pos)<1e-4){
+        return;
+    }
+    if(curr_pos > final_pos)
+        direction = -1;
+    if(curr_pos < final_pos)
+        direction = 1;
+    curr_pos += (direction*0.04);
 }
 
 inline void preprocess(const cv::Mat& frame, cv::dnn::Net& net, cv::Size inpSize, float scale,
@@ -207,9 +230,9 @@ void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net&
     
     if(centers.size()==1){
         int loc = centers[0].x;
-        region = 3 - Width / loc;
-        if (region<1)
-            region = 1;
+        region = 2 - Width / loc;
+        if (region<0)
+            region = 0;
         //printf("region is %d\n", region);
     }
     for (size_t idx = 0; idx < boxes.size(); ++idx)

@@ -8,7 +8,7 @@ LDFLAGS+= -L/usr/local/lib \
 			 -lopencv_video \
 			 -lopencv_imgproc -lopencv_core \
 			 -lpthread
-SOURCES=yolo_opencv.cpp
+SOURCES=yolo_opencv_sequential.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
 PROGRAM=speaker_tracker
 
