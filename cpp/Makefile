@@ -1,7 +1,6 @@
 CXX=g++
 CFLAGS+=-I/usr/local/include/opencv4/opencv -I/usr/local/include/opencv4
 LDFLAGS+= -L/usr/local/lib \
-			 -lopencv_gapi \
 			 -lopencv_highgui \
 			 -lopencv_dnn \
 			 -lopencv_videoio \

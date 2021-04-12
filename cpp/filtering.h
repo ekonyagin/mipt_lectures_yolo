@@ -1,3 +1,4 @@
+#include <array>
 #include <iostream>
 #include <queue>
 #include <vector>
@@ -6,13 +7,13 @@
 
 class Filtering{
 private:
-    const int n_regions = 3;
+    static const int n_regions = 3;
     int current_region;
     int switch_delay;
     int queue_length;
     int cnt = 0;
     std::queue<int> regions;
-    std::vector<int> frequencies={0,0,0};
+    std::array<int, n_regions> frequencies;
 public:
     Filtering(int n_frames, int delay){
         queue_length = n_frames;

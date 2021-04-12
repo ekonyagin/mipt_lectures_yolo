@@ -1,3 +1,4 @@
+#include <cmath>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -29,12 +30,16 @@ void callback(int pos, void* userdata);
 bool AddPoint(const cv::Point& point, const std::vector<cv::Point>& points);
 
 inline int define_bounding_rect(const int& region_id);
-inline void make_transition(double& curr_pos, int final_pos);
+
+inline bool make_transition(double& curr_pos, int prev_region, int final_pos, int& cnt);
+
+inline double sigmoid(const int& cnt);
+inline double tanh(const int& cnt);
 
 
 int main(int argc, char** argv)
 {
-    Filtering filt(50, 75); // sliding window length, then delay length (in frames)
+    Filtering filt(50, 95); // sliding window length, then delay length (in frames)
 
     const std::string NAME = "output1.avi";
 
@@ -97,13 +102,17 @@ int main(int argc, char** argv)
     bool process = true;
 
     int filtered_region = 0;
+    int prev_region = 0;
 
     double curr_pos = 0;
     
     cv::Mat original_frame, frame;
-    //cv::Mat blob;
-        
     cap >> original_frame;
+
+    bool transition_status;
+    int cnt = 0;
+
+
     int n_processed = 0;        
     while((!original_frame.empty()) && (cv::waitKey(1) < 0)){
         cv::resize(original_frame, frame, cv::Size(), 0.2, 0.2);
@@ -115,8 +124,13 @@ int main(int argc, char** argv)
         filt.update(region);
         filtered_region = filt.get_region();
 
-        make_transition(curr_pos, filtered_region);
+        transition_status = make_transition(curr_pos, prev_region, filtered_region, cnt);
+        printf("Curr pos: %f\t Cnt: %d\t Final: %d\n", curr_pos, cnt, filtered_region);
+        if(transition_status == false)
+            prev_region = filtered_region;
+        //cnt = (int)transition_status * cnt;
         //printf("bbox is %d\n", (int)(curr_pos*960));
+
         cv::Mat crop = original_frame(cv::Rect((int)(curr_pos*960), 
                                                 370, 
                                                 1920,
@@ -134,18 +148,33 @@ int main(int argc, char** argv)
     return 0;
 }
 
-inline void make_transition(double& curr_pos, int final_pos){
-    int direction;
-    //std::cout << "current: " << curr_pos << " dst: " << final_pos << "\n";
-    if(std::abs(curr_pos-(double)final_pos)<1e-4){
-        return;
-    }
-    if(curr_pos > final_pos)
-        direction = -1;
-    if(curr_pos < final_pos)
-        direction = 1;
-    curr_pos += (direction*0.04);
+inline double sigmoid(const int& cnt){
+    double x = -1. + cnt/40.;
+    return 1./(1. + std::exp(-x*5));
 }
+
+inline double tanh(const int& cnt){
+    double x = -1. + cnt/40.;
+    return 0.5 + 0.5*std::tanh(2*x);
+}
+
+inline bool make_transition(double& curr_pos, int prev_region, int final_pos, int& cnt){
+    if(std::abs(curr_pos-(double)final_pos)<1e-3){
+        cnt = 0;
+        curr_pos = final_pos;
+        return false;
+    }
+    int coef = std::abs(prev_region-final_pos);
+    
+    if(prev_region > final_pos){
+        curr_pos = prev_region - coef*tanh(cnt);
+    }
+    if(prev_region < final_pos)
+        curr_pos = prev_region + coef*tanh(cnt);
+    cnt++;
+    return true;
+}
+
 
 inline void preprocess(const cv::Mat& frame, cv::dnn::Net& net, cv::Size inpSize, float scale,
                        const cv::Scalar& mean, bool swapRB)
@@ -229,11 +258,14 @@ void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net&
     //printf("Confidence size is %d\n", (int)confidences.size());
     
     if(centers.size()==1){
+
         int loc = centers[0].x;
+        //printf("Width is %d\t Height is %d\t loc is %d\n", Width, Height, loc);
         region = 2 - Width / loc;
         if (region<0)
             region = 0;
-        //printf("region is %d\n", region);
+        //region = loc/(Width/5);
+        //printf("region is %d\t region_2 is %d\n", region, loc/(Width/5));
     }
     for (size_t idx = 0; idx < boxes.size(); ++idx)
     {

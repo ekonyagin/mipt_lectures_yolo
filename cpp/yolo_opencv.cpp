@@ -128,7 +128,7 @@ int main(int argc, char** argv)
     // Open a video file or an image file or a camera stream.
     cv::VideoCapture cap;
 
-    cap.open("Clip0166.MXF");
+    cap.open("Clip0004.MXF");
 
     bool process = true;
 
@@ -317,6 +317,7 @@ void postprocess(cv::Mat& frame, const std::vector<cv::Mat>& outs, cv::dnn::Net&
     if(centers.size()==1){
         int loc = centers[0].x;
         region = 3 - Width / loc;
+        printf("Width is %d\n", Width);
         if (region<1)
             region = 1;
         //printf("region is %d\n", region);
